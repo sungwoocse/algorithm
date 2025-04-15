@@ -5,13 +5,14 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from typing import Callable, List, Dict, Any, Tuple
+from pathlib import Path
 
-class PerformanceTester:
+class AdvancedPerformanceTester:
     """
-    정렬 알고리즘의 성능을 측정하고 비교하는 클래스
+    고급 정렬 알고리즘의 성능을 측정하고 비교하는 클래스
     """
     
-    def __init__(self, data_dir='data', results_dir='results'):
+    def __init__(self, data_dir='data', results_dir='advanced_results'):
         """
         초기화 함수
         
@@ -35,11 +36,36 @@ class PerformanceTester:
             list: 정수 리스트
         """
         filepath = os.path.join(self.data_dir, filename)
-        data = []
-        with open(filepath, 'r') as f:
-            for line in f:
-                data.append(int(line.strip()))
-        return data
+        try:
+            data = []
+            with open(filepath, 'r') as f:
+                for line in f:
+                    data.append(int(line.strip()))
+            return data
+        except FileNotFoundError:
+            print(f"Warning: File {filepath} not found. Generating data on the fly.")
+            
+            # 데이터 크기 추출
+            size = int(filename.split('_')[-1].split('.')[0])
+            
+            # 데이터 유형 결정
+            if 'sorted_asc' in filename:
+                return list(range(size))
+            elif 'sorted_desc' in filename:
+                return list(range(size, 0, -1))
+            elif 'random' in filename:
+                return np.random.randint(0, size * 10, size).tolist()
+            elif 'partial' in filename:
+                # 부분 정렬 데이터 생성 (30% 무작위로 스왑)
+                data = list(range(size))
+                num_swaps = int(size * 0.3)
+                for _ in range(num_swaps):
+                    i, j = np.random.randint(0, size, 2)
+                    data[i], data[j] = data[j], data[i]
+                return data
+            else:
+                # 기본값: 무작위 데이터
+                return np.random.randint(0, size * 10, size).tolist()
     
     def measure_time(self, sort_func: Callable, data: List[int]) -> float:
         """
@@ -59,15 +85,19 @@ class PerformanceTester:
         start_time = time.time()
         
         # 정렬 함수 실행
-        sort_func(data_copy)
+        sorted_data = sort_func(data_copy)
         
         # 시간 측정 종료
         end_time = time.time()
         
         # 정렬 결과 확인 (정확성 검증)
-        is_sorted = all(data_copy[i] <= data_copy[i+1] for i in range(len(data_copy)-1))
+        if sorted_data is None:  # 일부 정렬 함수는 원본 배열을 변경
+            sorted_data = data_copy
+            
+        is_sorted = all(sorted_data[i] <= sorted_data[i+1] for i in range(len(sorted_data)-1))
         if not is_sorted:
-            print(f"경고: {sort_func.__name__} 함수가 데이터를 올바르게 정렬하지 않았습니다!")
+            func_name = sort_func.__name__ if hasattr(sort_func, '__name__') else "정렬 알고리즘"
+            print(f"경고: {func_name} 함수가 데이터를 올바르게 정렬하지 않았습니다!")
         
         return end_time - start_time
     
@@ -93,8 +123,8 @@ class PerformanceTester:
         if len(sizes) < 2:
             return "Estimated time: Unknown"
         
-        # O(n^2) 알고리즘에 대한 예상 (버블, 선택, 삽입 정렬)
-        if algo_name in ['Bubble Sort', 'Selection Sort', 'Insertion Sort']:
+        # O(n^2) 알고리즘에 대한 예상 (Cocktail Sort)
+        if algo_name in ['Cocktail Sort']:
             # 가장 큰 샘플 크기와 실행 시간
             largest_size = sizes[-1]
             largest_time = algo_times[largest_size]
@@ -112,7 +142,7 @@ class PerformanceTester:
             else:
                 return f"Estimated time: {estimated_time/86400:.2f} days"
         
-        # O(n log n) 알고리즘에 대한 예상 (병합, 퀵, 힙 정렬)
+        # O(n log n) 알고리즘에 대한 예상 (대부분의 고급 정렬 알고리즘)
         else:
             # 가장 큰 샘플 크기와 실행 시간
             largest_size = sizes[-1]
@@ -124,13 +154,12 @@ class PerformanceTester:
             
             # 시간 포맷팅
             if estimated_time < 60:
-                return f"예상 시간: {estimated_time:.2f}초"
+                return f"Estimated time: {estimated_time:.2f} seconds"
             elif estimated_time < 3600:
-                return f"예상 시간: {estimated_time/60:.2f}분"
+                return f"Estimated time: {estimated_time/60:.2f} minutes"
             else:
-                return f"예상 시간: {estimated_time/3600:.2f}시간"
+                return f"Estimated time: {estimated_time/3600:.2f} hours"
     
-    # 수정할 부분: performance_tester.py 파일의 measure_memory 함수
     def measure_memory(self, sort_func: Callable, data: List[int]) -> float:
         """
         정렬 함수의 메모리 사용량 측정
@@ -201,7 +230,6 @@ class PerformanceTester:
         
         return result
     
-    # compare_algorithms 함수 수정 부분
     def compare_algorithms(self, algorithms: Dict[str, Callable], filenames: List[str], num_runs: int = 10) -> pd.DataFrame:
         """
         여러 정렬 알고리즘의 성능 비교
@@ -231,13 +259,12 @@ class PerformanceTester:
                     # 숫자가 없는 경우 기본값
                     data_size = 0
                 
-                # O(n^2) 알고리즘은 크기가 10000을 초과하는 경우에만 예상값 사용
-                if data_size > 10000 and algo_name in ['Bubble Sort', 'Selection Sort', 'Insertion Sort']:
+                # O(n^2) 알고리즘은 크기가 100000을 초과하는 경우에만 예상값 사용
+                if data_size > 10000 and algo_name in ['Cocktail Sort', 'Library Sort']:
                     print(f"Large dataset: {algo_name} on {filename} - using estimated time")
                     
                     # 예상 시간 계산
                     estimated_time_str = self.estimate_time(algo_name, data_size, sample_times)
-                
                     
                     # 예상 결과 생성
                     result = {
@@ -310,7 +337,7 @@ class PerformanceTester:
             df_save = df_save.drop('avg_time', axis=1)
         
         df_save.to_csv(filepath, index=False)
-        print(f"결과가 {filepath}에 저장되었습니다.")
+        print(f"Results saved to {filepath}")
     
     def plot_time_comparison(self, df: pd.DataFrame = None, save_path: str = None):
         """
@@ -374,10 +401,11 @@ class PerformanceTester:
             
             # 그래프 저장
             if save_path:
-                os.makedirs(save_path, exist_ok=True)
-                plt.savefig(os.path.join(save_path, f'time_comparison_{size}.png'))
+                save_dir = os.path.join(self.results_dir, save_path)
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, f'time_comparison_{size}.png'))
             
-            plt.show()
+            plt.close()
     
     def plot_memory_comparison(self, df: pd.DataFrame = None, save_path: str = None):
         """
@@ -434,10 +462,11 @@ class PerformanceTester:
             
             # 그래프 저장
             if save_path:
-                os.makedirs(save_path, exist_ok=True)
-                plt.savefig(os.path.join(save_path, f'memory_comparison_{size}.png'))
+                save_dir = os.path.join(self.results_dir, save_path)
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, f'memory_comparison_{size}.png'))
             
-            plt.show()
+            plt.close()
     
     def plot_line_comparison(self, df: pd.DataFrame = None, save_path: str = None):
         """
@@ -454,7 +483,13 @@ class PerformanceTester:
                     if not result.get('estimated', False):  # 예상값 제외
                         # 파일명에서 데이터셋 유형 추출 (예: sorted_asc, random 등)
                         dataset_parts = result['dataset'].split('_')
-                        dataset_type = '_'.join(dataset_parts[:-1])  # 마지막 숫자 부분 제외
+                        if len(dataset_parts) > 1:
+                            if 'partially' in dataset_parts[0]:
+                                dataset_type = 'partially_sorted'
+                            else:
+                                dataset_type = '_'.join(dataset_parts[:-1])  # 마지막 숫자 부분 제외
+                        else:
+                            dataset_type = dataset_parts[0]
                         
                         data.append({
                             'algorithm': algo_name,
@@ -493,10 +528,11 @@ class PerformanceTester:
             
             # 그래프 저장
             if save_path:
-                os.makedirs(save_path, exist_ok=True)
-                plt.savefig(os.path.join(save_path, f'line_comparison_{dataset_type}.png'))
+                save_dir = os.path.join(self.results_dir, save_path)
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, f'line_comparison_{dataset_type}.png'))
             
-            plt.show()
+            plt.close()
     
     def plot_algorithm_scaling(self, save_path: str = None):
         """
@@ -524,8 +560,22 @@ class PerformanceTester:
             algo_df = df[df['algorithm'] == algo]
             
             # 데이터셋 유형별로 그래프 생성
-            for dataset_type in algo_df['dataset'].str.split('_').str[:-1].str.join('_').unique():
-                type_mask = algo_df['dataset'].str.startswith(dataset_type)
+            dataset_types = []
+            for dataset in algo_df['dataset'].unique():
+                if 'sorted_asc' in dataset:
+                    dataset_types.append('sorted_asc')
+                elif 'sorted_desc' in dataset:
+                    dataset_types.append('sorted_desc')
+                elif 'random' in dataset:
+                    dataset_types.append('random')
+                elif 'partial' in dataset:
+                    dataset_types.append('partial')
+            
+            dataset_types = list(set(dataset_types))
+            
+            for dataset_type in dataset_types:
+                # 해당 데이터셋 유형을 포함하는 파일들 필터링
+                type_mask = algo_df['dataset'].str.contains(dataset_type)
                 type_df = algo_df[type_mask].sort_values('data_size')
                 
                 # 충분한 데이터 포인트가 있는 경우에만 그래프 그리기
@@ -566,27 +616,27 @@ class PerformanceTester:
             
             # 그래프 저장
             if save_path:
-                os.makedirs(save_path, exist_ok=True)
-                plt.savefig(os.path.join(save_path, f'scaling_{algo}.png'))
+                save_dir = os.path.join(self.results_dir, save_path)
+                os.makedirs(save_dir, exist_ok=True)
+                plt.savefig(os.path.join(save_dir, f'scaling_{algo}.png'))
             
-            plt.show()
+            plt.close()
     
-    # plot_theoretical_vs_actual 함수 부분 수정
     def plot_theoretical_vs_actual(self, save_path: str = None):
         """
-        Comparison of theoretical complexity and actual performance
+        이론적 복잡도와 실제 성능 비교
         
         Args:
-            save_path (str): Path to save the graph
+            save_path (str): 그래프를 저장할 경로
         """
         # 알고리즘별 복잡도 정의
         complexities = {
-            'Bubble Sort': lambda n: n**2,
-            'Selection Sort': lambda n: n**2,
-            'Insertion Sort': lambda n: n**2,
-            'Merge Sort': lambda n: n * np.log2(n),
-            'Quick Sort': lambda n: n * np.log2(n),
-            'Heap Sort': lambda n: n * np.log2(n),
+            'Cocktail Sort': lambda n: n**2,
+            'Comb Sort': lambda n: n * np.log2(n),
+            'Intro Sort': lambda n: n * np.log2(n),
+            'Library Sort': lambda n: n * np.log2(n),
+            'Tim Sort': lambda n: n * np.log2(n),
+            'Tournament Sort': lambda n: n * np.log2(n)
         }
         
         # 모든 결과에서 평균 시간 데이터 추출
@@ -638,32 +688,34 @@ class PerformanceTester:
         
         # 그래프 저장
         if save_path:
-            os.makedirs(save_path, exist_ok=True)
-            plt.savefig(os.path.join(save_path, 'theoretical_vs_actual.png'))
+            save_dir = os.path.join(self.results_dir, save_path)
+            os.makedirs(save_dir, exist_ok=True)
+            plt.savefig(os.path.join(save_dir, 'theoretical_vs_actual.png'))
         
-        plt.show()
+        plt.close()
+
 
 # 실행 예시
 if __name__ == "__main__":
     # 알고리즘 함수 임포트
-    from algorithm.basic.bubble_sort import bubble_sort
-    from algorithm.basic.selection_sort import selection_sort
-    from algorithm.basic.insertion_sort import insertion_sort
-    from algorithm.basic.merge_sort import merge_sort
-    from algorithm.basic.quick_sort import quick_sort
-    from algorithm.basic.heap_sort import heap_sort
+    from advanced.cocktail_sort import cocktail_sort
+    from advanced.comb_sort import comb_sort
+    from advanced.intro_sort import introsort
+    from advanced.library_sort import library_sort
+    from advanced.tim_sort import tim_sort
+    from advanced.tournament_sort import tournament_sort
     
     # 성능 테스터 초기화
-    tester = PerformanceTester()
+    tester = AdvancedPerformanceTester()
     
     # 테스트할 알고리즘
     algorithms = {
-        'Bubble Sort': bubble_sort,
-        'Selection Sort': selection_sort,
-        'Insertion Sort': insertion_sort,
-        'Merge Sort': merge_sort,
-        'Quick Sort': quick_sort,
-        'Heap Sort': heap_sort
+        'Cocktail Sort': cocktail_sort,
+        'Comb Sort': comb_sort,
+        'Intro Sort': introsort,
+        'Library Sort': library_sort,
+        'Tim Sort': tim_sort,
+        'Tournament Sort': tournament_sort
     }
     
     # 테스트할 파일 (크기별로 모든 유형 선택)
@@ -685,8 +737,8 @@ if __name__ == "__main__":
     tester.save_results(results)
     
     # 결과 시각화
-    tester.plot_time_comparison(save_path='results/graphs')
-    tester.plot_memory_comparison(save_path='results/graphs')
-    tester.plot_line_comparison(save_path='results/graphs')
-    tester.plot_algorithm_scaling(save_path='results/graphs')
-    tester.plot_theoretical_vs_actual(save_path='results/graphs')
+    tester.plot_time_comparison(save_path='graphs')
+    tester.plot_memory_comparison(save_path='graphs')
+    tester.plot_line_comparison(save_path='graphs')
+    tester.plot_algorithm_scaling(save_path='graphs')
+    tester.plot_theoretical_vs_actual(save_path='graphs')

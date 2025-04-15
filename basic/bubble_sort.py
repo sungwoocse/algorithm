@@ -1,15 +1,17 @@
-def bubble_sort(arr):
-    n = len(arr)
+def bubble_sort(array):
+    size = len(array)
+    pass_num = 0
+    swapped = True
     
-    for i in range(n):
+    while swapped and pass_num < size:
         swapped = False
+        index = 0
         
-        for j in range(0, n-i-1):
-            if arr[j] > arr[j+1]:
-                arr[j], arr[j+1] = arr[j+1], arr[j]
+        while index < size - pass_num - 1:
+            if array[index] > array[index + 1]:
+                array[index], array[index + 1] = array[index + 1], array[index]
                 swapped = True
-        
-        if not swapped:
-            break
+            index += 1
+        pass_num += 1
     
-    return arr
+    return array

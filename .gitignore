@@ -1,0 +1,7 @@
+# Python byte-compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 특정 경로의 __pycache__ 폴더
+utils/__pycache__/
